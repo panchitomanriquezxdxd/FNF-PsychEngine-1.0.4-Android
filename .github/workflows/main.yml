@@ -34,10 +34,11 @@ jobs:
             artifactPath: export/release/macos/bin/*
           - name: Android
             os: macos-15
-            buildArgs: "android -ONLY_ARMV7"
+            buildArgs: "android"
             setupCommand: sh ./setup/unix.sh
             artifactName: androidBuild
             artifactPath: "export/release/android/bin/app/build/outputs/apk/release/*.apk"
+            requiredAbis: "armeabi-v7a,arm64-v8a"
           - name: iOS
             os: macos-15
             buildArgs: "ios -nosign"
@@ -52,3 +53,4 @@ jobs:
         setupCommand: ${{ matrix.setupCommand }}
         artifactName: ${{ matrix.artifactName }}
         artifactPath: ${{ matrix.artifactPath }}
+        requiredAbis: ${{ matrix.requiredAbis }}

@@ -64,6 +64,18 @@ class Hitbox extends MobileInputManager implements IMobileControls
 	 */
 	var mirrorHints:Array<Array<TouchButton>> = [[], [], [], []];
 
+	/**
+	 * `true` when the current scheme has a second hint per direction (the double thumb ones).
+	 * Lets `checkStatusUnsafe` skip the mirror lookup entirely on every other scheme.
+	 */
+	var hasMirrors:Bool = false;
+
+	/**
+	 * Graphics built while the scheme is being created, so the mirrored hints of the double thumb
+	 * schemes reuse the same bitmap instead of drawing an identical one. Cleared once the layout is built.
+	 */
+	var graphicCache:Map<String, FlxGraphic> = new Map<String, FlxGraphic>();
+
 	final offsetFir:Int = (ClientPrefs.data.hitboxPos ? Std.int(FlxG.height / 4) * 3 : 0);
 	final offsetSec:Int = (ClientPrefs.data.hitboxPos ? 0 : Std.int(FlxG.height / 4));
 
@@ -126,8 +138,16 @@ class Hitbox extends MobileInputManager implements IMobileControls
 		storedButtonsIDs.clear();
 
 		for (i in 0...mirrorHints.length)
+		{
 			for (mirror in mirrorHints[i])
+			{
 				mirror.IDs = directionIDs[i].copy();
+				hasMirrors = true;
+			}
+		}
+
+		// The sprites hold their own reference to the graphics now, the cache is no longer needed
+		graphicCache.clear();
 
 		scrollFactor.set();
 		updateTrackedButtons();
@@ -142,6 +162,10 @@ class Hitbox extends MobileInputManager implements IMobileControls
 	override function checkStatusUnsafe(button:MobileInputID, state:mobile.input.MobileInputManager.ButtonsStates = JUST_PRESSED):Bool
 	{
 		final primary:Bool = super.checkStatusUnsafe(button, state);
+
+		// Every scheme except the double thumb ones, this runs for every key on every frame
+		if (!hasMirrors)
+			return primary;
 
 		var direction:Int = -1;
 		for (i in 0...directionIDs.length)
@@ -479,24 +503,43 @@ class Hitbox extends MobileInputManager implements IMobileControls
 		add(hint);
 	}
 
+	/**
+	 * Returns the graphic stored under `key`, building it with `build` the first time it is requested.
+	 */
+	function cachedGraphic(key:String, build:Void->FlxGraphic):FlxGraphic
+	{
+		var graphic:FlxGraphic = graphicCache.get(key);
+
+		if (graphic == null)
+		{
+			graphic = build();
+			graphicCache.set(key, graphic);
+		}
+
+		return graphic;
+	}
+
 	function createLaneHint(X:Float, Y:Float, Width:Int, Height:Int, withLabel:Bool):TouchButton
 	{
-		final graphic:FlxGraphic = createVSliceRectGraphic(Width, Height);
-		final labelGraphic:FlxGraphic = withLabel ? createVSliceLaneLabelGraphic(Width, Height, Math.floor(Height * 0.035)) : null;
+		final graphic:FlxGraphic = cachedGraphic('rect:$Width:$Height', () -> createVSliceRectGraphic(Width, Height));
+		final labelGraphic:FlxGraphic = withLabel ? cachedGraphic('label:$Width:$Height',
+			() -> createVSliceLaneLabelGraphic(Width, Height, Math.floor(Height * 0.035))) : null;
 		return createVSliceHint(X, Y, graphic, labelGraphic, false);
 	}
 
 	function createTriangleHint(X:Float, Y:Float, Width:Int, Height:Int, direction:Int):TouchButton
 	{
 		final vertices:Array<Float> = getTriangleVertices(Width, Height, direction);
-		final hint:TouchButton = createVSliceHint(X, Y, createVSliceTriangleGraphic(Width, Height, vertices), null, false);
+		final graphic:FlxGraphic = cachedGraphic('triangle:$Width:$Height:$direction', () -> createVSliceTriangleGraphic(Width, Height, vertices));
+		final hint:TouchButton = createVSliceHint(X, Y, graphic, null, false);
 		hint.polygon = vertices;
 		return hint;
 	}
 
 	function createCircleHint(X:Float, Y:Float, Radius:Int, Outline:Int):TouchButton
 	{
-		final hint:TouchButton = createVSliceHint(X, Y, createVSliceCircleGraphic(Radius, Outline), null, true);
+		final graphic:FlxGraphic = cachedGraphic('circle:$Radius:$Outline', () -> createVSliceCircleGraphic(Radius, Outline));
+		final hint:TouchButton = createVSliceHint(X, Y, graphic, null, true);
 		hint.radius = Radius;
 		return hint;
 	}
@@ -611,6 +654,18 @@ class Hitbox extends MobileInputManager implements IMobileControls
 
 		function fade(targetAlpha:Float, targetLabelAlpha:Float):Void
 		{
+			// The hints that are hidden while idle faded in 0.01s, which is shorter than a frame: set the alpha
+			// directly instead of allocating tweens and closures on every single press.
+			if (!visibleStyle)
+			{
+				hint.alpha = targetAlpha;
+
+				if (hasLabel)
+					hint.label.alpha = targetLabelAlpha;
+
+				return;
+			}
+
 			if (hintTween != null)
 				hintTween.cancel();
 

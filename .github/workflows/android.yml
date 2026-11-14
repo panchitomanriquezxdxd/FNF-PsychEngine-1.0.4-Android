@@ -1,0 +1,56 @@
+name: Android (armeabi-v7a + arm64-v8a)
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the APK as a GitHub pre-release
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  PROJECT_NAME: PsychEngine
+
+jobs:
+  build:
+    name: Android universal APK
+    uses: ./.github/workflows/build.yml
+    with:
+      name: Android
+      os: macos-15
+      setupCommand: sh ./setup/unix.sh
+      buildArgs: "android -final -D officialBuild"
+      artifactName: androidBuild-universal
+      artifactPath: "export/release/android/bin/app/build/outputs/apk/release/*.apk"
+      # The job fails if the APK doesn't contain native libraries for both architectures
+      requiredAbis: "armeabi-v7a,arm64-v8a"
+
+  release:
+    name: Publish release
+    needs: build
+    if: ${{ inputs.publish_release }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@main
+        with:
+          name: androidBuild-universal
+          path: apk
+
+      - name: Rename APK
+        run: mv "$(ls apk/*.apk | head -n 1)" "apk/${{ env.PROJECT_NAME }}-Android-universal.apk"
+
+      - name: Get short commit hash
+        id: vars
+        run: echo "hash=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Android Build ${{ steps.vars.outputs.hash }}"
+          tag_name: "android-${{ steps.vars.outputs.hash }}"
+          prerelease: true
+          files: apk/${{ env.PROJECT_NAME }}-Android-universal.apk

@@ -31,7 +31,9 @@ package mobile.objects;
 class MobileControls extends FlxTypedSpriteGroup<MobileInputManager>
 {
 	public var touchPad:TouchPad = new TouchPad('NONE', 'NONE', NONE);
-	public var hitbox:Hitbox = new Hitbox(NONE);
+	// Only created when the hitbox mode is selected. Building one by default drew every hint of the selected
+	// V-Slice scheme (full screen bitmaps) just to throw it away when a touch pad is used instead.
+	public var hitbox:Hitbox = null;
 
 	public function new(?forceType:Int, ?extra:Bool = true)
 	{

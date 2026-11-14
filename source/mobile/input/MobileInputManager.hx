@@ -50,7 +50,7 @@ class MobileInputManager extends FlxTypedSpriteGroup<TouchButton>
 	 */
 	public inline function buttonPressed(button:MobileInputID):Bool
 	{
-		return anyPressed([button]);
+		return checkStatus(button, PRESSED);
 	}
 
 	/**
@@ -61,7 +61,7 @@ class MobileInputManager extends FlxTypedSpriteGroup<TouchButton>
 	 */
 	public inline function buttonJustPressed(button:MobileInputID):Bool
 	{
-		return anyJustPressed([button]);
+		return checkStatus(button, JUST_PRESSED);
 	}
 
 	/**
@@ -72,7 +72,7 @@ class MobileInputManager extends FlxTypedSpriteGroup<TouchButton>
 	 */
 	public inline function buttonJustReleased(button:MobileInputID):Bool
 	{
-		return anyJustReleased([button]);
+		return checkStatus(button, JUST_RELEASED);
 	}
 
 	/**
@@ -83,7 +83,7 @@ class MobileInputManager extends FlxTypedSpriteGroup<TouchButton>
 	 */
 	public inline function buttonReleased(button:MobileInputID):Bool
 	{
-		return anyReleased([button]);
+		return checkStatus(button, RELEASED);
 	}
 
 	/**

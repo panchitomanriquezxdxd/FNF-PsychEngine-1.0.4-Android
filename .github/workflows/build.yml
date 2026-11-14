@@ -21,6 +21,11 @@ on:
       artifactPath:
         required: true
         type: string
+      requiredAbis:
+        description: Comma separated Android ABIs (e.g. armeabi-v7a,arm64-v8a) that the APK must contain, the build fails if one is missing
+        required: false
+        type: string
+        default: ''
 
 env:
   HAXE_VERSION: 4.3.6
@@ -64,6 +69,29 @@ jobs:
 
       - name: Compile
         run: haxelib run lime build ${{ inputs.buildArgs }}
+
+      - name: Verify Android ABIs
+        if: inputs.name == 'Android' && inputs.requiredAbis != ''
+        shell: bash
+        run: |
+          apk=$(ls ${{ inputs.artifactPath }} | head -n 1)
+          echo "Checking $apk"
+
+          libs=$(unzip -Z1 "$apk" | grep '^lib/' || true)
+          echo "Native libraries found in the APK:"
+          echo "$libs"
+
+          missing=0
+          for abi in $(echo "${{ inputs.requiredAbis }}" | tr ',' ' '); do
+            if echo "$libs" | grep -q "^lib/$abi/"; then
+              echo "OK: $abi"
+            else
+              echo "::error::The APK has no native libraries for $abi"
+              missing=1
+            fi
+          done
+
+          exit $missing
 
       - name: Make IPA
         if: inputs.name == 'iOS'

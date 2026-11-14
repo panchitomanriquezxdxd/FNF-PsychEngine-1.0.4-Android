@@ -170,10 +170,15 @@
 	
 	<!--Used for crash handler-->
 	<section if="cpp">
-		<haxedef name="HXCPP_CHECK_POINTER" />
-		<haxedef name="HXCPP_STACK_LINE" />
 		<haxedef name="HXCPP_STACK_TRACE" />
 		<haxedef name="HXCPP_CATCH_SEGV" />
+		<!-- Null pointer checks and per-line stack tracking add overhead to every call, which is noticeable on phones.
+			Release builds for mobile skip them (crash logs keep the function stack but lose the line numbers).
+			Remove the `desktop || debug` condition if you need exact lines in release crash reports. -->
+		<section if="desktop || debug">
+			<haxedef name="HXCPP_CHECK_POINTER" />
+			<haxedef name="HXCPP_STACK_LINE" />
+		</section>
 	</section>
 	
 	<!--Disable deprecated warnings-->
