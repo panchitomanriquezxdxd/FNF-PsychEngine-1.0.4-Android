@@ -1881,6 +1881,133 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		return dataCopy;
 	}
 
+	// ------------------------------------------------------------------------------------------
+	// Note commands adapted from the V-Slice chart editor (FlipNotesCommand, RemoveStackedNotesCommand
+	// and InvertSelectedItemsCommand). They work on the selection and can be undone/redone.
+	// ------------------------------------------------------------------------------------------
+
+	/**
+	 * Notes closer than this (in milliseconds) on the same column count as stacked (same default as V-Slice).
+	 */
+	static final STACKED_NOTE_THRESHOLD:Float = 20;
+
+	function getSectionNumberAt(strumTime:Float):Int // 0-based index of the section that contains this time
+	{
+		var secNum:Int = 0;
+		while(secNum + 1 < cachedSectionTimes.length && cachedSectionTimes[secNum + 1] <= strumTime)
+			secNum++;
+
+		return secNum;
+	}
+
+	/**
+	 * Moves the selected notes to the other side of the chart (player <-> opponent), V-Slice's "Flip Notes".
+	 */
+	function flipSelectedNotes():Void
+	{
+		var originalNotes:Array<MetaNote> = [];
+		for (note in selectedNotes)
+			if(note != null && !note.isEvent)
+				originalNotes.push(note);
+
+		if(originalNotes.length < 1)
+		{
+			showOutput('Select some notes first.', true);
+			return;
+		}
+
+		var maxData:Int = GRID_COLUMNS_PER_PLAYER * GRID_PLAYERS;
+		var movedNotes:Array<MetaNote> = [];
+		for (note in originalNotes)
+		{
+			var flippedData:Int = (Std.int(note.songData[1]) + GRID_COLUMNS_PER_PLAYER) % maxData;
+			var dataCopy:Array<Dynamic> = makeNoteDataCopy(note.songData, false);
+			dataCopy[1] = flippedData;
+
+			var flipped:MetaNote = createNote(dataCopy, getSectionNumberAt(note.strumTime));
+			flipped.changeNoteData(flippedData);
+			positionNoteXByData(flipped);
+			movedNotes.push(flipped);
+		}
+
+		resetSelectedNotes();
+		for (note in originalNotes)
+			notes.remove(note);
+
+		for (note in movedNotes)
+			notes.push(note);
+
+		notes.sort(PlayState.sortByTime);
+		selectedNotes = movedNotes.copy();
+		softReloadNotes();
+		onSelectNote();
+
+		addUndoAction(MOVE_NOTE, {originalNotes: originalNotes, originalEvents: [], movedNotes: movedNotes, movedEvents: []});
+		showOutput('Flipped ${movedNotes.length} note(s).');
+	}
+
+	/**
+	 * Removes notes that are stacked on top of another one (same column, almost the same time).
+	 * Only looks at the selected notes if there are any, otherwise at the whole chart.
+	 */
+	function removeStackedNotes():Void
+	{
+		var source:Array<MetaNote> = [];
+		for (note in selectedNotes)
+			if(note != null && !note.isEvent)
+				source.push(note);
+
+		var usingSelection:Bool = source.length > 0;
+		if(!usingSelection) source = notes.copy();
+
+		source.sort(PlayState.sortByTime);
+
+		var lastKeptTime:Map<Int, Float> = new Map<Int, Float>();
+		var removedNotes:Array<MetaNote> = [];
+		for (note in source)
+		{
+			if(note == null) continue;
+
+			var column:Int = Std.int(note.songData[1]);
+			if(lastKeptTime.exists(column) && note.strumTime - lastKeptTime.get(column) <= STACKED_NOTE_THRESHOLD)
+				removedNotes.push(note);
+			else
+				lastKeptTime.set(column, note.strumTime);
+		}
+
+		if(removedNotes.length < 1)
+		{
+			showOutput(usingSelection ? 'No stacked notes in the selection.' : 'No stacked notes found.');
+			return;
+		}
+
+		actionRemoveNotes(removedNotes, []);
+		addUndoAction(DELETE_NOTE, {notes: removedNotes, events: []});
+		showOutput('Removed ${removedNotes.length} stacked note(s).');
+	}
+
+	/**
+	 * Selects everything in the current section that is not selected and deselects what was, V-Slice's "Invert Selection".
+	 */
+	function invertSelection():Void
+	{
+		var oldSelection:Array<MetaNote> = selectedNotes.copy();
+		var inverted:Array<MetaNote> = [];
+		for (note in curRenderedNotes.members)
+		{
+			if(note == null || !note.exists) continue;
+			if(lockedEvents && note.isEvent) continue;
+
+			if(!oldSelection.contains(note))
+				inverted.push(note);
+		}
+
+		resetSelectedNotes();
+		selectedNotes = inverted;
+		addUndoAction(SELECT_NOTE, {old: oldSelection, current: inverted.copy()});
+		onSelectNote();
+	}
+
 	function updateScrollY()
 	{
 		var secStartTime:Null<Float> = cast cachedSectionTimes[curSec];
@@ -2232,6 +2359,9 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		var gottaHitNote:Bool = (note[1] < GRID_COLUMNS_PER_PLAYER);
 
 		var swagNote:MetaNote = new MetaNote(daStrumTime, daNoteData, note);
+		// chartNoteData has to hold the whole chart column (0-7), not just the lane, or undoing a deletion
+		// (actionPushNotes writes it back to songData[1]) would move opponent notes to the player's side
+		swagNote.chartNoteData = Std.int(note[1]);
 		swagNote.mustPress = gottaHitNote;
 		swagNote.setSustainLength(note[2], cachedSectionCrochets[secNum] / 4, curZoom);
 		swagNote.gfNote = (section.gfSection && gottaHitNote == section.mustHitSection);
@@ -3277,6 +3407,12 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 			softReloadNotes(true);
 		});
 
+		// V-Slice style commands, they work on the selected notes and can be undone
+		objY += 30;
+		var flipSelectedButton:PsychUIButton = new PsychUIButton(objX, objY, 'Flip Selected', function() flipSelectedNotes());
+		var removeStackedButton:PsychUIButton = new PsychUIButton(objX + 100, objY, 'Remove Stacked', function() removeStackedNotes());
+		var invertSelectionButton:PsychUIButton = new PsychUIButton(objX + 200, objY, 'Invert Select', function() invertSelection());
+
 		tab_group.add(mustHitCheckBox);
 		tab_group.add(gfSectionCheckBox);
 		tab_group.add(altAnimSectionCheckBox);
@@ -3298,6 +3434,10 @@ class ChartingState extends MusicBeatState implements PsychUIEventHandler.PsychU
 		tab_group.add(swapSectionButton);
 		tab_group.add(duetSectionButton);
 		tab_group.add(mirrorNotesButton);
+
+		tab_group.add(flipSelectedButton);
+		tab_group.add(removeStackedButton);
+		tab_group.add(invertSelectionButton);
 	}
 
 	function reloadNotesDropdowns()
