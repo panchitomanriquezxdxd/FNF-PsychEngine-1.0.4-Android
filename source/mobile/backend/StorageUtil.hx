@@ -40,7 +40,7 @@ class StorageUtil
 			if (!FileSystem.exists(folder))
 				FileSystem.createDirectory(folder);
 
-			File.saveContent('$folder/$fileName', fileData);
+			File.saveContent('$folder$fileName', fileData); // folder already ends with a slash
 			if (alert)
 				CoolUtil.showPopUp(Language.getPhrase('file_save_success', '{1} has been saved.', [fileName]), Language.getPhrase('mobile_success', "Success!"));
 		}

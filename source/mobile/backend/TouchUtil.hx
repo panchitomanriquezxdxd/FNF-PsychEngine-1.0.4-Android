@@ -48,16 +48,19 @@ class TouchUtil
 
 	public static function overlapsComplex(object:FlxObject, ?camera:FlxCamera):Bool
 	{
-		if (camera == null)
-			for (camera in object.cameras)
-				for (touch in FlxG.touches.list)
-					@:privateAccess
-					if (object.overlapsPoint(touch.getWorldPosition(camera, object._point), true, camera))
-						return true;
-		else
-			@:privateAccess
-			if (object.overlapsPoint(touch.getWorldPosition(camera, object._point), true, camera))
-				return true;
+		// The old version had a dangling `else` that bound to the inner `if`, so it always returned false
+		// when a camera was passed and checked the wrong touch when it wasn't.
+		final cams:Array<FlxCamera> = (camera == null) ? object.cameras : [camera];
+
+		for (cam in cams)
+		{
+			for (touch in FlxG.touches.list)
+			{
+				@:privateAccess
+				if (object.overlapsPoint(touch.getWorldPosition(cam, object._point), true, cam))
+					return true;
+			}
+		}
 
 		return false;
 	}

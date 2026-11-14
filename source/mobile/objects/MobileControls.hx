@@ -56,6 +56,14 @@ class MobileControls extends FlxTypedSpriteGroup<MobileInputManager>
 		var extraAction = MobileData.extraActions.get(ClientPrefs.data.extraButtons);
 		if (!extra)
 			extraAction = NONE;
+
+		// The field initializers create default instances that get replaced below, destroy the one that is
+		// about to be replaced so it doesn't leak (the other one is left alone since other code may read it).
+		if (controlMode == 3)
+			hitbox = FlxDestroyUtil.destroy(hitbox);
+		else
+			touchPad = FlxDestroyUtil.destroy(touchPad);
+
 		switch (controlMode)
 		{
 			case 0:
