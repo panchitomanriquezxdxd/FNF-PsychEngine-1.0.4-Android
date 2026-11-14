@@ -196,6 +196,18 @@ class TypedTouchButton<T:FlxSprite> extends FlxSprite implements IFlxInput
 	public var canChangeLabelAlpha:Bool = true;
 
 	/**
+	 * Optional polygon (flat array `[x0, y0, x1, y1, ...]`, relative to the button's top-left corner)
+	 * used to narrow the touch area down from the bounding box. Used by the V-Slice triangle hints.
+	 */
+	public var polygon:Array<Float> = null;
+
+	/**
+	 * If bigger than 0, the touch area becomes a circle inscribed in the button's bounding box.
+	 * Used by the V-Slice DPad hints.
+	 */
+	public var radius:Float = 0;
+
+	/**
 	 * Creates a new `FlxTypedButton` object with a gray background.
 	 *
 	 * @param   X         The x position of the button.
@@ -328,13 +340,54 @@ class TypedTouchButton<T:FlxSprite> extends FlxSprite implements IFlxInput
 		{
 			currentInput = null;
 		}
-		else if (overlapsPoint(pointer.getWorldPosition(camera, _point), true, camera))
+		else if (overlapsPoint(pointer.getWorldPosition(camera, _point), true, camera) && overlapsShape(_point))
 		{
 			updateStatus(input);
 			return true;
 		}
 
 		return false;
+	}
+
+	/**
+	 * Narrow phase of the touch detection, only relevant if `polygon` or `radius` are set.
+	 * @param point The pointer position in world space.
+	 */
+	function overlapsShape(point:FlxPoint):Bool
+	{
+		if (radius <= 0 && (polygon == null || polygon.length < 6))
+			return true;
+
+		final px:Float = point.x - x;
+		final py:Float = point.y - y;
+
+		if (radius > 0)
+		{
+			final dx:Float = px - width / 2;
+			final dy:Float = py - height / 2;
+			final r:Float = width / 2;
+			return (dx * dx + dy * dy) <= (r * r);
+		}
+
+		// Ray casting point-in-polygon test
+		var inside:Bool = false;
+		final count:Int = Std.int(polygon.length / 2);
+		var j:Int = count - 1;
+
+		for (i in 0...count)
+		{
+			final xi:Float = polygon[i * 2];
+			final yi:Float = polygon[i * 2 + 1];
+			final xj:Float = polygon[j * 2];
+			final yj:Float = polygon[j * 2 + 1];
+
+			if (((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi))
+				inside = !inside;
+
+			j = i;
+		}
+
+		return inside;
 	}
 
 	/**

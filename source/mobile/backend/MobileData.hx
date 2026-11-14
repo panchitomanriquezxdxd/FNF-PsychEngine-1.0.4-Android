@@ -122,6 +122,10 @@ class MobileData
 			button.label.updateColorTransform();
 		}
 
+		// V-Slice double thumb schemes have a second hint per direction, keep them in sync
+		if (Std.isOfType(buttonsInstance, Hitbox))
+			cast(buttonsInstance, Hitbox).syncMirrorColors();
+
 		return buttonsInstance;
 	}
 

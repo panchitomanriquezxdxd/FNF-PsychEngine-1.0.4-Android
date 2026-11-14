@@ -71,6 +71,11 @@ class MobileOptionsSubState extends BaseOptionsMenu
 
 		if (MobileData.mode == 3)
 		{
+			option = new Option('Hitbox Scheme',
+				'Choose the layout of your hitbox.\nClassic is the original one, the rest are the V-Slice mobile layouts.', 'hitboxScheme', STRING,
+				Hitbox.allSchemes);
+			addOption(option);
+
 			option = new Option('Hitbox Design', 'Choose how your hitbox should look like.', 'hitboxType', STRING, hintOptions);
 			addOption(option);
 
